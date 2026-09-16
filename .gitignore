@@ -21,7 +21,6 @@
 CLAUDE.md
 AGENTS.md
 /.claude/
-dist
 logs
 /*.so
 /*.log

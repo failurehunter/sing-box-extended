@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#141414" />
+    <link rel="icon" type="image/svg+xml" href="/assets/icon-CQ9oKloi.svg" />
+    <title>Sing-box Extended</title>
+    <!--
+      Resolve the user's saved theme mode AND accent colour before the
+      React bundle loads so the document doesn't paint white (or with
+      the wrong accent) for a frame on reload. Mirrors the same
+      `sing-box-admin:mode` and `sing-box-admin:accent` localStorage
+      keys the React provider uses, falls back to `prefers-color-scheme`
+      for the mode and the default accent (#3b82f6) for the colour, and
+      hard-defaults to dark. The colour values match `theme.ts`
+      (DARK.surface / LIGHT.surface), and `--sb-accent` is the same CSS
+      variable every accent-aware MUI override consumes — by stamping it
+      onto <html> before any styles are applied, the very first frame
+      of every reload renders with the saved accent instead of flashing
+      the default blue.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("sing-box-admin:mode");
+          var prefersLight =
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: light)").matches;
+          var mode =
+            stored === "light" || stored === "dark"
+              ? stored
+              : prefersLight
+                ? "light"
+                : "dark";
+          var bg = mode === "light" ? "#ffffff" : "#141414";
+          var fg = mode === "light" ? "#0f172a" : "#f5f5f5";
+          var root = document.documentElement;
+          root.style.colorScheme = mode;
+          root.style.backgroundColor = bg;
+          // Accent — same `isHexColor` check the React side does, so a
+          // corrupted value can never poison the CSS variable.
+          var accentRaw = localStorage.getItem("sing-box-admin:accent");
+          var accent =
+            accentRaw && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(accentRaw)
+              ? accentRaw
+              : "#3b82f6";
+          root.style.setProperty("--sb-accent", accent);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", bg);
+          document.addEventListener("DOMContentLoaded", function () {
+            document.body.style.backgroundColor = bg;
+            document.body.style.color = fg;
+          });
+        } catch (_) {
+          /* ignore */
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-CsvqkJgF.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DX91zFbL.css">
+      <link rel="preload" href="/assets/inter-latin-400-normal-C38fXH4l.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/inter-latin-500-normal-Cerq10X2.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/inter-latin-600-normal-LgqL8muc.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/inter-latin-700-normal-Yt3aPRUw.woff2" as="font" type="font/woff2" crossorigin>
+  </head>
+  <body style="margin:0;font-family:Inter,system-ui,sans-serif">
+    <div id="root"></div>
+  </body>
+</html>
