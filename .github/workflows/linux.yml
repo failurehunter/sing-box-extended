@@ -61,7 +61,6 @@ jobs:
           - { os: linux, arch: loong64, naive: true, debian: loongarch64, rpm: loongarch64 }
           # Non-naive builds (unsupported architectures)
           - { os: linux, arch: arm, goarm: "6", debian: armel, rpm: armv6hl }
-          - { os: linux, arch: mips64le, debian: mips64el, rpm: mips64el }
           - { os: linux, arch: s390x, debian: s390x, rpm: s390x }
           - { os: linux, arch: ppc64le, debian: ppc64el, rpm: ppc64le }
     steps:
