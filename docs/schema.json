@@ -17255,6 +17255,9 @@
             },
             "permit_without_stream": {
               "type": "boolean"
+            },
+            "user_agent": {
+              "type": "string"
             }
           },
           "required": [

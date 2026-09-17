@@ -27,13 +27,23 @@ var defaultClientHeader = http.Header{
 	"TE":           []string{"trailers"},
 }
 
+// Keepalive parameters mirroring google.golang.org/grpc:
+//   - keepaliveMinPingTime: internal.KeepaliveMinPingTime (10s), applied when
+//     clamping kp.Time in grpc.WithKeepaliveParams.
+//   - defaultClientKeepaliveTimeout: internal/transport.defaultClientKeepaliveTimeout.
+const (
+	keepaliveMinPingTime          = 10 * time.Second
+	defaultClientKeepaliveTimeout = 20 * time.Second
+)
+
 type Client struct {
-	ctx        context.Context
-	serverAddr M.Socksaddr
-	transport  *http2.Transport
-	options    option.V2RayGRPCOptions
-	url        *url.URL
-	host       string
+	ctx           context.Context
+	serverAddr    M.Socksaddr
+	transport     *http2.Transport
+	options       option.V2RayGRPCOptions
+	requestHeader http.Header
+	url           *url.URL
+	host          string
 }
 
 func NewClient(ctx context.Context, dialer N.Dialer, serverAddr M.Socksaddr, options option.V2RayGRPCOptions, tlsConfig tls.Config) adapter.V2RayClientTransport {
@@ -43,13 +53,31 @@ func NewClient(ctx context.Context, dialer N.Dialer, serverAddr M.Socksaddr, opt
 	} else {
 		host = serverAddr.String()
 	}
+	readIdleTimeout := time.Duration(options.IdleTimeout)
+	pingTimeout := time.Duration(options.PingTimeout)
+	// Mirror grpc-go keepalive.ClientParameters handling in
+	// grpc.WithKeepaliveParams (dialoptions.go) and the client transport
+	// (internal/transport, http2_client.go):
+	//   - Time is clamped to >= internal.KeepaliveMinPingTime (10s).
+	//   - Timeout defaults to defaultClientKeepaliveTimeout (20s).
+	if readIdleTimeout > 0 && readIdleTimeout < keepaliveMinPingTime {
+		readIdleTimeout = keepaliveMinPingTime
+	}
+	if pingTimeout == 0 {
+		pingTimeout = defaultClientKeepaliveTimeout
+	}
+	requestHeader := defaultClientHeader.Clone()
+	if options.UserAgent != "" {
+		requestHeader.Set("User-Agent", options.UserAgent)
+	}
 	client := &Client{
-		ctx:        ctx,
-		serverAddr: serverAddr,
-		options:    options,
+		ctx:           ctx,
+		serverAddr:    serverAddr,
+		options:       options,
+		requestHeader: requestHeader,
 		transport: &http2.Transport{
-			ReadIdleTimeout:    time.Duration(options.IdleTimeout),
-			PingTimeout:        time.Duration(options.PingTimeout),
+			ReadIdleTimeout:    readIdleTimeout,
+			PingTimeout:        pingTimeout,
 			DisableCompression: true,
 		},
 		url: &url.URL{
@@ -82,7 +110,7 @@ func (c *Client) DialContext(ctx context.Context) (net.Conn, error) {
 		Method: http.MethodPost,
 		Body:   pipeInReader,
 		URL:    c.url,
-		Header: defaultClientHeader,
+		Header: c.requestHeader,
 		Host:   c.host,
 	}
 	request = request.WithContext(ctx)
