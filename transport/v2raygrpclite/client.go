@@ -27,6 +27,15 @@ var defaultClientHeader = http.Header{
 	"TE":           []string{"trailers"},
 }
 
+// Keepalive parameters mirroring google.golang.org/grpc:
+//   - keepaliveMinPingTime: internal.KeepaliveMinPingTime (10s), applied when
+//     clamping kp.Time in grpc.WithKeepaliveParams.
+//   - defaultClientKeepaliveTimeout: internal/transport.defaultClientKeepaliveTimeout.
+const (
+	keepaliveMinPingTime          = 10 * time.Second
+	defaultClientKeepaliveTimeout = 20 * time.Second
+)
+
 type Client struct {
 	ctx        context.Context
 	serverAddr M.Socksaddr
@@ -43,13 +52,26 @@ func NewClient(ctx context.Context, dialer N.Dialer, serverAddr M.Socksaddr, opt
 	} else {
 		host = serverAddr.String()
 	}
+	readIdleTimeout := time.Duration(options.IdleTimeout)
+	pingTimeout := time.Duration(options.PingTimeout)
+	// Mirror grpc-go keepalive.ClientParameters handling in
+	// grpc.WithKeepaliveParams (dialoptions.go) and the client transport
+	// (internal/transport, http2_client.go):
+	//   - Time is clamped to >= internal.KeepaliveMinPingTime (10s).
+	//   - Timeout defaults to defaultClientKeepaliveTimeout (20s).
+	if readIdleTimeout > 0 && readIdleTimeout < keepaliveMinPingTime {
+		readIdleTimeout = keepaliveMinPingTime
+	}
+	if pingTimeout == 0 {
+		pingTimeout = defaultClientKeepaliveTimeout
+	}
 	client := &Client{
 		ctx:        ctx,
 		serverAddr: serverAddr,
 		options:    options,
 		transport: &http2.Transport{
-			ReadIdleTimeout:    time.Duration(options.IdleTimeout),
-			PingTimeout:        time.Duration(options.PingTimeout),
+			ReadIdleTimeout:    readIdleTimeout,
+			PingTimeout:        pingTimeout,
 			DisableCompression: true,
 		},
 		url: &url.URL{

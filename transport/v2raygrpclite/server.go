@@ -27,6 +27,10 @@ import (
 
 var _ adapter.V2RayServerTransport = (*Server)(nil)
 
+// defaultServerKeepaliveTimeout mirrors internal/transport.defaultServerKeepaliveTimeout
+// in google.golang.org/grpc, applied when keepalive Timeout is unset.
+const defaultServerKeepaliveTimeout = 20 * time.Second
+
 type Server struct {
 	tlsConfig  tls.ServerConfig
 	logger     logger.ContextLogger
@@ -38,13 +42,26 @@ type Server struct {
 }
 
 func NewServer(ctx context.Context, logger logger.ContextLogger, options option.V2RayGRPCOptions, tlsConfig tls.ServerConfig, handler adapter.V2RayServerTransportHandler) (*Server, error) {
+	readIdleTimeout := time.Duration(options.IdleTimeout)
+	pingTimeout := time.Duration(options.PingTimeout)
+	// Mirror grpc-go keepalive.ServerParameters handling in grpc.KeepaliveParams
+	// (server.go) and the server transport (internal/transport, http2_server.go):
+	//   - Time is clamped to >= internal.KeepaliveMinServerPingTime (1s).
+	//   - Timeout defaults to defaultServerKeepaliveTimeout (20s).
+	if readIdleTimeout > 0 && readIdleTimeout < time.Second {
+		readIdleTimeout = time.Second
+	}
+	if pingTimeout == 0 {
+		pingTimeout = defaultServerKeepaliveTimeout
+	}
 	server := &Server{
 		tlsConfig: tlsConfig,
 		logger:    logger,
 		handler:   handler,
 		path:      grpcPath(options.ServiceName),
 		h2Server: &http2.Server{
-			IdleTimeout: time.Duration(options.IdleTimeout),
+			ReadIdleTimeout: readIdleTimeout,
+			PingTimeout:     pingTimeout,
 		},
 	}
 	server.httpServer = &http.Server{
@@ -58,6 +75,9 @@ func NewServer(ctx context.Context, logger logger.ContextLogger, options option.
 	}
 	//nolint:staticcheck
 	server.h2cHandler = h2c.NewHandler(server, server.h2Server)
+	if h2Err := http2.ConfigureServer(server.httpServer, server.h2Server); h2Err != nil {
+		return nil, h2Err
+	}
 	return server, nil
 }
 
